@@ -5,7 +5,7 @@ const bcrypt = require('bcrypt');
 // create a sequelize instance with local database info
 var sequelizeDB = new Sequelize('mainDB', null, null, 
                                 {dialect: 'sqlite',
-                                 storage: "C:\\Users\\noamc\\Desktop\\sushi-login\\SushiUsers.db"});
+                                 storage: "/app/SushiUsers.db"});
 
 sequelizeDB
   .authenticate()

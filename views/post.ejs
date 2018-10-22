@@ -37,9 +37,14 @@
                 </div><!-- /.navbar-collapse -->
             </div><!-- /.container-fluid -->
         </nav>
-
+        
+        <br \>
         <div class="container-row">
-            <h1 id="greeting">Welcome, <%= username %>.</h1>
+            <form action="/post" method="POST">
+                <textarea name="post" rows="12" cols="65" placeholder="What's happening in your mind?" required></textarea> <br \>
+                <input class="btn btn-primary" type="submit" value="Post to all"/>
+          </form>
+          
         </div>
 
         <!-- Optional JavaScript -->

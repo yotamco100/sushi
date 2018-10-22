@@ -5,9 +5,21 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const morgan = require('morgan');
 const User = require('./models/user');
+const Sequelize = require('sequelize');
+const Twitter = require('node-twitter-api');
+
+var twitter = new Twitter({
+    consumerKey: process.env.CONSUMER_TOKEN,
+    consumerSecret: process.env.CONSUMER_SECRET,
+    callback: process.env.CALLBACK_URL
+});
+
+var sequelizeDB = new Sequelize('mainDB', null, null, 
+                                {dialect: 'sqlite',
+                                 storage: "/app/SushiUsers.db"});
 
 const app = express();
-app.set('port', 80);
+app.set('port', 8080);
 app.set('view engine', 'ejs');
 
 app.use(morgan('dev')); // for logging
@@ -71,18 +83,15 @@ app.route('/signup').get(sessionChecker, (req, res) => {
 //route to user login
 app.route('/login')
     .get(sessionChecker, (req, res) => {
-        res.render('login');
+        res.render('login', {error:null});
     })
     .post((req, res) => {
         var username = req.body.username,
             password = req.body.password;
         
-            User.findOne({ where: {username: username } }).then(function (user) {
-                console.log(user);
-                if(!user) {
-                    res.redirect('/login');
-                } else if (!user.validPassword(password)) {
-                    res.redirect('/login');
+            User.findOne({ where: {username: username, disabled:0 } }).then(function (user) {
+                if(!user || !user.validPassword(password)) {
+                    res.render('login', {error:"Invalid username and/or password."});
                 } else {
                     req.session.user = user.dataValues;
                     res.redirect('/dashboard');
@@ -112,10 +121,90 @@ app.get('/logout', (req, res) => {
 //route for settings
 app.get('/settings', (req, res) => {
     if(req.session.user && req.cookies.user_sid) {
-        res.render('settings', {username:req.session.user.username, twitter:"Not Supported Yet."})
+        var myToken = null;
+      User.findOne({ where: {username: req.session.user.username} }).then(function (oneRow) {
+        console.log("dataValues.Twit: " + oneRow.dataValues.TwitterToken);
+        myToken = oneRow.dataValues.TwitterToken;
+        console.log("myToken: " + myToken);
+        res.render('settings', {username:req.session.user.username, twitter: myToken});
+        });
     } else {
         res.redirect('/login');
     }
+});
+
+app.get('/deactivate', (req, res) => {
+    User.findOne({ where: {username: req.session.user.username} }).then(function (user) {
+        user.update({disabled:1});
+        res.send("Account deactivated.");
+        res.redirect('/logout');
+    })
+});
+
+//this is for handling the posting interface
+app.route('/post').get((req, res) => {
+    res.render('post', { username: req.session.user.username });})
+.post((req, res) => {
+    //now we process the post data and send to twitter
+  twitter.statuses("update", {
+        status: req.body.post
+    },
+    req.session.user.TwitterToken,
+    req.session.user.TwitterSecret,
+    function(error, data, response) {
+        if (error) {
+            res.send("something went wrong. Try again!");
+        } else {
+            res.redirect('/dashboard');
+        }
+    }
+);
+});
+
+//this block is for twitter authentication,
+var _requestSecret;
+
+app.get('/request-token', (req, res) => {
+    twitter.getRequestToken((err, requestToken, requestSecret) => {
+        if(err)
+          res.status(500).send(err);
+        else {
+          _requestSecret = requestSecret;
+          res.redirect("https://api.twitter.com/oauth/authenticate?oauth_token=" + requestToken);
+        }});
+});
+
+app.get('/twitter_auth_callback', (req, res) => {
+  res.render('twitter_auth_callback');
+});
+
+app.get("/access-token", function(req, res) {
+        var requestToken = req.query.oauth_token,
+            verifier = req.query.oauth_verifier;
+
+        twitter.getAccessToken(requestToken, _requestSecret, verifier, function(err, accessToken, accessSecret) {
+            if (err)
+                res.status(500).send(err);
+            else
+                twitter.verifyCredentials(accessToken, accessSecret, function(err, user) {
+                    if (err)
+                        res.status(500).send(err);
+                    else {
+                        User.findOne({ where: {username: req.session.user.username} }).then(function (user) {
+                            user.update({TwitterToken:accessToken, TwitterSecret:accessSecret});
+                            res.redirect('/settings');
+                        })
+                    }
+                });
+        });
+});
+
+//this is for revoking twitter access
+app.get('/revoke-twitter', (req, res) => {
+           User.findOne({ where: {username: req.session.user.username} }).then(function (user) {
+                            user.update({TwitterToken:null, TwitterSecret:null});
+                            res.redirect('/settings');
+                            });
 });
 
 // route for handling 404
