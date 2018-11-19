@@ -18,9 +18,9 @@
     "express-session": "^1.15.6",
     "html": "^1.0.0",
     "morgan": "^1.9.1",
-    "sequelize": "^4.39.1",
-    "sqlite3": "^4.0.2",
-    "bcrypt": "^3.0.1",
+    "sequelize": "^4.41.0",
+    "sqlite3": "^4.0.3",
+    "bcrypt": "^3.0.2",
     "node-twitter-api": "^1.8.0"
   }
 }
