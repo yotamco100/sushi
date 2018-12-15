@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const User = require('./models/user');
 const Sequelize = require('sequelize');
 const Twitter = require('node-twitter-api');
+const readline = require('readline');
 
 var twitter = new Twitter({
     consumerKey: process.env.CONSUMER_TOKEN,
@@ -42,6 +43,7 @@ app.use((req, res, next) => {
     if (req.cookies.user_sid && !req.session.user) {
         res.clearCookie('user_sid');
     }
+  // thank u,
     next();
 });
 
@@ -102,7 +104,8 @@ app.route('/login')
 // route for user's dashboard
 app.get('/dashboard', (req, res) => {
     if (req.session.user && req.cookies.user_sid) {
-        res.render('dashboard', {username:req.session.user.username});
+      var posts = [];
+        res.render('dashboard', {username:req.session.user.username, posts: posts});
     } else {
         res.redirect('/login');
     }
@@ -143,22 +146,48 @@ app.get('/deactivate', (req, res) => {
 
 //this is for handling the posting interface
 app.route('/post').get((req, res) => {
-    res.render('post', { username: req.session.user.username });})
+  if(req.session.user && req.cookies.user_sid) {
+    res.render('post', { username: req.session.user.username });
+  } else {
+        res.redirect('/login');
+  }})
 .post((req, res) => {
     //now we process the post data and send to twitter
-  twitter.statuses("update", {
-        status: req.body.post
-    },
-    req.session.user.TwitterToken,
-    req.session.user.TwitterSecret,
-    function(error, data, response) {
-        if (error) {
-            res.send("something went wrong. Try again!");
-        } else {
-            res.redirect('/dashboard');
+  req.session.lastpost = req.body.post;
+  console.log(req.body.social);
+  if(req.body.social !== undefined)
+  {
+      if(req.body.social.includes("Twitter"))
+        {
+            twitter.statuses("update", {
+                  status: req.body.post
+              },
+              req.session.user.TwitterToken,
+              req.session.user.TwitterSecret,
+              function(error, data, response) {
+                  if (error) {
+                      res.send("something went wrong. Try again!");
+                  }
+              }
+          );
         }
+        if(req.body.social.includes("Facebook"))
+        {
+            res.redirect('/afterpost');
+        }
+  }
+  res.redirect('/dashboard');
+});
+
+app.get('/afterpost', (req, res) => {
+    if(req.session.lastpost)
+    {
+        res.render('afterpost', {username:req.session.user.username ,post:req.session.lastpost});
     }
-);
+    else if(req.session.user && req.cookies.user_sid)
+        res.redirect('/dashboard');
+    else
+        res.redirect('/');
 });
 
 //this block is for twitter authentication,
